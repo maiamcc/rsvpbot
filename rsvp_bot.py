@@ -62,13 +62,17 @@ def respond_private_msg(msg):
                 response_text = "Sorry, you have no events at this time. Make one with `new [shortname]`!"
                 send_response_msg(msg, response_text)
         elif content.startswith("new"):
-            shortname = re.search('(?<=new ).*', content).group()
-            new_event = Event(shortname, hosts=[user])
-            all_events.append(new_event)
-            their_events = [event for event in all_events if user in event.hosts]
-            event_index = their_events.index(new_event)
-            response_text = "You've created your event, `%s`, at index %d." % (shortname, event_index)
-            send_response_msg(msg, response_text)
+            shortname = re.search('(?<=^new ).*', content).group()
+            if " " in shortname:
+                response_text = "Sorry, shortnames can't contain spaces!"
+                send_response_msg(msg, response_text)
+            else:
+                new_event = Event(shortname, user)
+                all_events.append(new_event)
+                their_events = [event for event in all_events if user in event.hosts]
+                event_index = their_events.index(new_event)
+                response_text = "You've created your event, `%s`, at index %d." % (shortname, event_index)
+                send_response_msg(msg, response_text)
         else:
             response_text = "Sorry, I didn't get that! Try again?"
             send_response_msg(msg, response_text)
@@ -123,8 +127,8 @@ client.call_on_each_message(process_incoming_message)
 """
 Anatomy of an event:
     - host: event owner, has admin privileges.
-    - shortname: identifier for an event. Guests can use this for RSVPs via PM, and
-        it will appear on the host's admin panel.
+    - shortname: identifier for an event. NO SPACES, PLEASE. Guests can use this
+        for RSVPs via PM, and it will appear on the host's admin panel.
     - stream (defaults to Social) and subject: thread in which discussion
         will take place--RSVP Bot will watch this topic for RSVPs.
     - description: any relevant information about the event (what, when,
@@ -137,7 +141,7 @@ Host Commands, General:
     - `list`: lists all of the events for which you're a host. You can use these numbers
         or the event shortnames to access a the event for host commands.
     - `new [shortname]`: create a new event with the given shortname (which you can
-        edit via event-specific commands).
+        edit via event-specific commands). Remember: shortnames should NOT contain spaces!
 
 Host Commands, Event-Specific (`[event index/shortname] [command] [argument, if necessary]`):
     - `add_host [host email]`: adds a host to the event. # TODO
