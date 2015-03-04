@@ -16,6 +16,15 @@ client = zulip.Client(email=os.environ['RSVPBOT_USERNAME'],
 global all_events
 all_events = []
 
+def get_users_events(user_email):
+    """Returns a list of all events of which given user is the host."""
+    return [event for event in all_events if event.host == user_email]
+
+# is this useful? this is a terrible function name. the comprehension might
+    # take fewer chars
+# def get_event_attrs_from_list(event_list, attr):
+#     return [getattr(event, attr) for event in event_list]
+
 class Event(object):
     def __init__(self, shortname, host, stream="Social", subject=None,
             description=None, guestlist=[], posted=False):
@@ -41,7 +50,7 @@ def respond_private_msg(msg):
     content = msg["content"]
     user = msg["sender_email"]
     firstword = re.search(".*?(?= |$)", content).group()
-    their_events = [event for event in all_events if user == event.host]
+    their_events = get_users_events(user)
     # TODO: ^make this a function?
     if content.lower() == "help":
         send_response_msg(msg, HELP_MSG)
@@ -51,7 +60,7 @@ def respond_private_msg(msg):
         else:
             i = [event.shortname for event in their_events].index(firstword)
         the_event = their_events[i]
-        print the_event, the_event.shortname, the_event.host
+
     else: # general commands
         if content == "list":
             if their_events:
@@ -70,7 +79,7 @@ def respond_private_msg(msg):
             else:
                 new_event = Event(shortname, user)
                 all_events.append(new_event)
-                their_events = [event for event in all_events if user == event.host]
+                their_events = get_users_events(user)
                 event_index = their_events.index(new_event)
                 response_text = "You've created your event, `%s`, at index %d." % (shortname, event_index)
                 send_response_msg(msg, response_text)
