@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-
 import os
+import re
 import zulip
 
 class SendMsgError(Exception): pass
@@ -13,17 +13,21 @@ HELP_MSG = """Hi, I'm RSVP Bot! I don't do anything yet. Sorry."""
 client = zulip.Client(email=os.environ['RSVPBOT_USERNAME'],
                       api_key=os.environ['RSVPBOT_API_KEY'])
 
+global all_events
 all_events = []
 
 class Event(object):
-    def __init__(self, hosts=[], subject=None, shortname=None, attending=[],
-            description=None, posted=False):
-        self.hosts = hosts
-        self.subject = subject
+    def __init__(self, shortname, hosts=[], stream="Social", subject=None,
+            description=None, attending=[], posted=False):
         self.shortname = shortname
-        self.attending = attending
+        self.hosts = hosts
+        self.stream = stream
+        self.subject = subject
         self.description = description
+        self.attending = attending
         self.posted = posted
+        # TODO: recurring?
+        # should all this stuff even be passed in by the constructor?
 
 def process_incoming_message(msg):
     if msg["sender_email"] != "rsvp-bot@students.hackerschool.com":
@@ -34,10 +38,37 @@ def process_incoming_message(msg):
             respond_stream_msg(msg)
 
 def respond_private_msg(msg):
-    # if lower(msg["content"]) == "help":
-    content = msg["content"]
-    send_response_msg(msg, "you sent me: %s" % content)
-    send_new_msg("private", "and here's a new message!", recipient="maia.mcc@gmail.com")
+    content = msg["content"].lower()
+    user = msg["sender_email"]
+    number = re.search("^\d*", content).group()
+    their_events = [event for event in all_events if user in event.hosts]
+    # TODO: ^make this a function?
+    if content == "help":
+        send_response_msg(msg, HELP_MSG)
+    elif number:
+        # event-specific commands
+        i = int(number)
+        response_text = "You're trying to access event %d: %s" % (i, their_events[i].shortname)
+        send_response_msg(msg, response_text)
+    else:
+        # general commands
+        if content == "list":
+            if their_events:
+                response_text = ["Okay, here are all of your events:"]
+                for i, event in enumerate(their_events):
+                    response_text.append("%d. %s" % (i, event.shortname))
+                send_response_msg(msg, "\n".join(response_text))
+            else:
+                response_text = "Sorry, you have no events at this time. Make one with `new [shortname]`!"
+                send_response_msg(msg, response_text)
+        if content.startswith("new"):
+            shortname = re.search('(?<=new ).*', content).group()
+            new_event = Event(shortname, hosts=[user])
+            all_events.append(new_event)
+            their_events = [event for event in all_events if user in event.hosts]
+            event_index = their_events.index(new_event)
+            response_text = "You've created your event, `%s`, at index %d." % (shortname, event_index)
+            send_response_msg(msg, response_text)
 
 def respond_stream_msg(msg):
     content = msg["content"]
@@ -87,15 +118,17 @@ def print_message(msg):
 client.call_on_each_message(process_incoming_message)
 
 """
-An event has:
-    a host(s) - list of usernames
-    an associated topic (zulip subject)
-    a shortname - used to rsvp to this event (do i want to restrict to
-        no spaces?)
-    attending list
-    description
-    posted - bool saying whether this event has been posted to
-        zulip (on a public stream)
+Anatomy of an event:
+    - host(s) = those with admin privileges for the event (list of user emails)
+    - shortname = identifier for an event. Guests can use this for RSVPs via PM, and
+        it will appear on the hosts's admin panel.
+    - stream (defaults to Social) and subject = thread in which discussion
+        will take place--RSVP Bot will watch this topic for RSVPs
+    - description = any relevant information about the event (what, when,
+        where, etc.); RSVP Bot will post this in the thread when soliciting RSVPs.
+    - attending list = just what it says on the tin
+    - posted = boolean saying whether or not RSVP Bot has (publicly) posted this event
+        to its stream
 
 general host actions:
     list (show all events that I'm a host of)
@@ -108,6 +141,7 @@ Host actions for a particular event
     PM all guests
     PM all y/m
     list all attending
+    review details of an event
     close event
     personalized invite (sent to users(s) via PM -- "reply to this message with the text 'xyz __' to rsvp")
     edit subject/description/shortname
