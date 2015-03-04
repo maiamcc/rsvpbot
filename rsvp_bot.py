@@ -17,14 +17,14 @@ global all_events
 all_events = []
 
 class Event(object):
-    def __init__(self, shortname, hosts=[], stream="Social", subject=None,
-            description=None, attending=[], posted=False):
+    def __init__(self, shortname, host, stream="Social", subject=None,
+            description=None, guestlist=[], posted=False):
         self.shortname = shortname
-        self.hosts = hosts
+        self.hosts = host
         self.stream = stream
         self.subject = subject
         self.description = description
-        self.attending = attending
+        self.guestlist = guestlist
         self.posted = posted
         # TODO: recurring?
         # should all this stuff even be passed in by the constructor?
@@ -61,13 +61,16 @@ def respond_private_msg(msg):
             else:
                 response_text = "Sorry, you have no events at this time. Make one with `new [shortname]`!"
                 send_response_msg(msg, response_text)
-        if content.startswith("new"):
+        elif content.startswith("new"):
             shortname = re.search('(?<=new ).*', content).group()
             new_event = Event(shortname, hosts=[user])
             all_events.append(new_event)
             their_events = [event for event in all_events if user in event.hosts]
             event_index = their_events.index(new_event)
             response_text = "You've created your event, `%s`, at index %d." % (shortname, event_index)
+            send_response_msg(msg, response_text)
+        else:
+            response_text = "Sorry, I didn't get that! Try again?"
             send_response_msg(msg, response_text)
 
 def respond_stream_msg(msg):
@@ -119,41 +122,43 @@ client.call_on_each_message(process_incoming_message)
 
 """
 Anatomy of an event:
-    - host(s) = those with admin privileges for the event (list of user emails)
-    - shortname = identifier for an event. Guests can use this for RSVPs via PM, and
-        it will appear on the hosts's admin panel.
-    - stream (defaults to Social) and subject = thread in which discussion
-        will take place--RSVP Bot will watch this topic for RSVPs
-    - description = any relevant information about the event (what, when,
+    - host: event owner, has admin privileges.
+    - shortname: identifier for an event. Guests can use this for RSVPs via PM, and
+        it will appear on the host's admin panel.
+    - stream (defaults to Social) and subject: thread in which discussion
+        will take place--RSVP Bot will watch this topic for RSVPs.
+    - description: any relevant information about the event (what, when,
         where, etc.); RSVP Bot will post this in the thread when soliciting RSVPs.
-    - attending list = just what it says on the tin
-    - posted = boolean saying whether or not RSVP Bot has (publicly) posted this event
-        to its stream
+    - guestlist: just what it says on the tin.
+    - posted: boolean saying whether or not RSVP Bot has (publicly) posted this event
+        to its stream.
 
-general host actions:
-    list (show all events that I'm a host of)
-    new (make a new event)
+Host Commands, General:
+    - `list`: lists all of the events for which you're a host. You can use these numbers
+        or the event shortnames to access a the event for host commands.
+    - `new [shortname]`: create a new event with the given shortname (which you can
+        edit via event-specific commands).
 
-Host actions for a particular event
-    add host
-    post (post the event to stream) (a generic message)
-    remind (to stream) (custom message?)
-    PM all guests
-    PM all y/m
-    list all attending
-    review details of an event
-    close event
-    personalized invite (sent to users(s) via PM -- "reply to this message with the text 'xyz __' to rsvp")
-    edit subject/description/shortname
+Host Commands, Event-Specific (`[event index/shortname] [command] [argument, if necessary]`):
+    - `add_host [host email]`: adds a host to the event. # TODO
+    - `review`: review properties of the event (host, stream, subject, details, brief guest list).
+    - `edit [shortname/stream/topic/description] [new value]`: overwrites the given property with
+        the new value.
+    - `post` [opt. message]: posts the event and its details to its stream, plus an
+        additional message, if specified.
+    - `message_all/message_yes/message_maybe [message]`: PMs all those who have RSVP'd
+        yes or maybe (or only yes's, or only maybe's) with the given message.
+    - `guestlist`: displays detailed guest list.
+    - `invite [email list]`: sends a generic invitation message to all given users via PM.
+        (Provide emails as a comma-separated list.)
+    - `close`: Close the event. The event will no longer appear in your list, and
+        all associated information will be deleted.
 
 When you rsvp:
     y/n/m
     guests
     bringing
     notes
-
-(in thread: @rsvp_bot xy)
-(in pm: {shortname} xy)
 
 @rsvp_bot help (in pm or thread)
 """
