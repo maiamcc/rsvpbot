@@ -20,7 +20,7 @@ class Event(object):
     def __init__(self, shortname, host, stream="Social", subject=None,
             description=None, guestlist=[], posted=False):
         self.shortname = shortname
-        self.hosts = host
+        self.host = host
         self.stream = stream
         self.subject = subject
         self.description = description
@@ -38,20 +38,21 @@ def process_incoming_message(msg):
             respond_stream_msg(msg)
 
 def respond_private_msg(msg):
-    content = msg["content"].lower()
+    content = msg["content"]
     user = msg["sender_email"]
-    number = re.search("^\d*", content).group()
-    their_events = [event for event in all_events if user in event.hosts]
+    firstword = re.search(".*?(?= |$)", content).group()
+    their_events = [event for event in all_events if user == event.host]
     # TODO: ^make this a function?
-    if content == "help":
+    if content.lower() == "help":
         send_response_msg(msg, HELP_MSG)
-    elif number:
-        # event-specific commands
-        i = int(number)
-        response_text = "You're trying to access event %d: %s" % (i, their_events[i].shortname)
-        send_response_msg(msg, response_text)
-    else:
-        # general commands
+    elif firstword.isdigit() or firstword in [event.shortname for event in their_events]:
+        if firstword.isdigit():
+            i = int(firstword)
+        else:
+            i = [event.shortname for event in their_events].index(firstword)
+        the_event = their_events[i]
+        print the_event, the_event.shortname, the_event.host
+    else: # general commands
         if content == "list":
             if their_events:
                 response_text = ["Okay, here are all of your events:"]
@@ -69,7 +70,7 @@ def respond_private_msg(msg):
             else:
                 new_event = Event(shortname, user)
                 all_events.append(new_event)
-                their_events = [event for event in all_events if user in event.hosts]
+                their_events = [event for event in all_events if user == event.host]
                 event_index = their_events.index(new_event)
                 response_text = "You've created your event, `%s`, at index %d." % (shortname, event_index)
                 send_response_msg(msg, response_text)
